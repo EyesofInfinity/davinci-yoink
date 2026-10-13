@@ -1,6 +1,6 @@
 """DaVinci Yoink: paste a video link, and it lands on your DaVinci Resolve timeline.
 
-Workspace > Scripts > Utility > DaVinci Yoink. Paste a URL (YouTube or any site yt-dlp supports), pick a quality and
+Workspace > Scripts > DaVinci Yoink. Paste a URL (YouTube or any site yt-dlp supports), pick a quality and
 press Yoink. The file downloads to your Yoink folder, goes into a "Yoinked" bin in the Media Pool, and drops onto the
 current timeline at the playhead: picture and sound each on the first track that is free there, linked together.
 

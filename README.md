@@ -38,7 +38,7 @@ cd davinci-yoink
 python install.py
 ```
 
-This copies the script into Resolve's `Fusion/Scripts/Utility` folder for your user. Restart Resolve if it's open, then open **Workspace > Scripts > Utility > DaVinci Yoink**.
+This copies the script into Resolve's `Fusion/Scripts/Utility` folder for your user. Restart Resolve if it's open, then open **Workspace > Scripts > DaVinci Yoink**.
 
 To remove it: `python install.py --uninstall`
 
