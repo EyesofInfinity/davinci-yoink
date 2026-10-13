@@ -20,12 +20,14 @@ Download folder: DAVINCI_YOINK_DIR, else the folder written by `install.py --fol
 
 Headless use from outside Resolve (Resolve Studio running, external scripting set to Local):
     python davinci_yoink.py --headless <url> [--quality 1080|best|audio] [--no-timeline]
+Check the setup (and, with Resolve Studio reachable, what Resolve's own Python sees):
+    python davinci_yoink.py --doctor
 
 MIT License. See LICENSE.
 """
 import csv, datetime, glob, json, os, platform, re, shutil, subprocess, sys
 
-__version__ = "1.0.2"
+__version__ = "1.1.0"
 DEFAULT_DIR = None                     # install.py --folder writes a path here in the installed copy
 BIN = "Yoinked"
 ORIG = "[format_note*=original]"
@@ -109,6 +111,91 @@ def js_runtime(env):
         if shutil.which(rt, path=env["PATH"]):
             return ["--js-runtimes", rt]
     return []
+
+
+def private_copy(path):
+    """True when a file under AppData is a packaged app's private copy (Windows virtualizes AppData writes made from
+    inside packaged apps, such as AI desktop apps, into Packages\\<app>\\LocalCache; other programs never see them)"""
+    if SYSTEM != "Windows" or not path:
+        return False
+    pkgs = os.path.join(os.environ.get("LOCALAPPDATA", ""), "Packages")
+    for base, sub in ((os.environ.get("APPDATA"), "Roaming"), (os.environ.get("LOCALAPPDATA"), "Local")):
+        if base and os.path.normcase(os.path.abspath(path)).startswith(os.path.normcase(base) + os.sep):
+            rel = os.path.relpath(path, base)
+            try:
+                apps = os.listdir(pkgs)
+            except OSError:
+                return False
+            return any(os.path.exists(os.path.join(pkgs, a, "LocalCache", sub, rel)) for a in apps)
+    return False
+
+
+def check():
+    """what DaVinci Yoink can find, the way it finds it at download time"""
+    env = tool_env()
+    rep = {"version": __version__, "python": sys.version.split()[0], "yt-dlp": None, "ffmpeg": None, "js": None,
+           "folder": out_dir(), "problems": []}
+    try:
+        cmd = ytdlp_cmd(env)
+        where = cmd[0]
+        if cmd[1:2] == ["-m"]:                                  # yt-dlp as a module: locate the module itself
+            r = subprocess.run([cmd[0], "-c", "import yt_dlp; print(yt_dlp.__file__)"], capture_output=True,
+                               text=True, env=env, creationflags=NO_WINDOW)
+            where = r.stdout.strip() or cmd[0]
+        rep["yt-dlp"] = where
+    except RuntimeError:
+        rep["problems"].append('yt-dlp not found: pip install -U "yt-dlp[default]"')
+    rep["ffmpeg"] = shutil.which("ffmpeg", path=env["PATH"])
+    if not rep["ffmpeg"]:
+        rep["problems"].append("ffmpeg not found: " + {"Windows": "winget install Gyan.FFmpeg",
+                                                         "Darwin": "brew install ffmpeg"}.get(SYSTEM, "install ffmpeg"))
+    rep["js"] = next((shutil.which(rt, path=env["PATH"]) for rt in ("deno", "node") if shutil.which(rt, path=env["PATH"])), None)
+    for name in ("yt-dlp", "ffmpeg"):
+        if private_copy(rep[name]):
+            rep["problems"].append(f"{name} at {rep[name]} is a packaged app's private copy that Resolve cannot see; "
+                                   'reinstall it outside that app or with  python -s -m pip install --no-user -U "yt-dlp[default]"')
+    return rep
+
+
+def _doctor():
+    """print what this Python finds, then ask Resolve's own Python (Resolve Studio, external scripting on)"""
+    import tempfile, time
+    here = os.path.dirname(os.path.abspath(__file__))
+    rep = check()
+    print(f"DaVinci Yoink {rep['version']} (this shell, Python {rep['python']})")
+    for k in ("yt-dlp", "ffmpeg", "js", "folder"):
+        print(f"  {k:7} {rep[k] or 'MISSING'}")
+    try:
+        r = _scripting_module().scriptapp("Resolve")
+    except Exception:
+        r = None
+    if r is None:
+        print("Resolve: not reachable (it needs Resolve Studio open with external scripting set to Local). Open "
+              "Workspace > Scripts > DaVinci Yoink instead: its status line names anything missing.")
+        res = None
+    else:
+        out = os.path.join(tempfile.gettempdir(), "davinci_yoink_doctor.json")
+        probe = os.path.join(tempfile.gettempdir(), "davinci_yoink_doctor.py")
+        if os.path.exists(out):
+            os.remove(out)
+        with open(probe, "w", encoding="utf-8") as f:
+            f.write(f"import json, sys\nsys.path.insert(0, {here!r})\nimport davinci_yoink as d\n"
+                    f"json.dump(d.check(), open({out!r}, 'w', encoding='utf-8'))\n")
+        r.Fusion().RunScript(probe)
+        for _ in range(50):
+            if os.path.exists(out):
+                break
+            time.sleep(0.2)
+        res = json.load(open(out, encoding="utf-8")) if os.path.exists(out) else None
+        if res:
+            print(f"Resolve's own Python {res['python']} sees:")
+            for k in ("yt-dlp", "ffmpeg", "js"):
+                print(f"  {k:7} {res[k] or 'MISSING'}")
+        else:
+            print("Resolve: answered but did not run the probe")
+    problems = (res or rep)["problems"]                       # Resolve's own view wins when it answers
+    print("OK: ready to yoink" if not problems else "PROBLEMS:\n  " + "\n  ".join(problems))
+    sys.exit(1 if problems else 0)
 
 
 def download(url, quality="1080", folder=None, status=print):
@@ -249,6 +336,8 @@ def place(resolve, path, to_timeline=True, status=print):
 
 
 def gui(resolve, fu, bmd):
+    problems = check()["problems"]
+    first = f"ready  ({out_dir()})" if not problems else "not ready: " + "  |  ".join(problems)
     ui = fu.UIManager
     disp = bmd.UIDispatcher(ui)
     win = disp.AddWindow({"ID": "Yoink", "WindowTitle": "DaVinci Yoink", "Geometry": [300, 300, 600, 170]},
@@ -259,7 +348,7 @@ def gui(resolve, fu, bmd):
                                         ui.CheckBox({"ID": "Tl", "Text": "Drop on the timeline at the playhead",
                                                      "Checked": True}),
                                         ui.Button({"ID": "Go", "Text": "Yoink", "Weight": 0})]),
-                             ui.Label({"ID": "Status", "Text": f"ready  ({out_dir()})", "WordWrap": True}),
+                             ui.Label({"ID": "Status", "Text": first, "WordWrap": True}),
                          ]))
     it = win.GetItems()
     for q in ("1080p H.264 (plays everywhere)", "Best quality (often 4K VP9/AV1)", "Audio only (WAV)"):
@@ -320,7 +409,9 @@ def _headless(argv):
     place(r, path, not a.no_timeline)
 
 
-if __name__ == "__main__" and "--headless" in sys.argv:
+if __name__ == "__main__" and "--doctor" in sys.argv:
+    _doctor()
+elif __name__ == "__main__" and "--headless" in sys.argv:
     _headless(sys.argv[1:])
 elif "resolve" in globals() and ("fu" in globals() or "fusion" in globals()):
     gui(resolve, globals().get("fu") or globals().get("fusion"), bmd)  # noqa: F821  (Resolve's script globals)
