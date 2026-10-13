@@ -25,7 +25,7 @@ MIT License. See LICENSE.
 """
 import csv, datetime, glob, json, os, platform, re, shutil, subprocess, sys
 
-__version__ = "1.0.1"
+__version__ = "1.0.2"
 DEFAULT_DIR = None                     # install.py --folder writes a path here in the installed copy
 BIN = "Yoinked"
 ORIG = "[format_note*=original]"
@@ -63,11 +63,24 @@ def tool_env():
     else:
         extra += ["/usr/local/bin"]
     env = dict(os.environ)
-    parts = env.get("PATH", "").split(os.pathsep)
-    env["PATH"] = os.pathsep.join(parts + [p for p in extra if os.path.isdir(p) and p not in parts])
+    parts = [p for p in env.get("PATH", "").split(os.pathsep) if p]
+    add = [p for p in extra if os.path.isdir(p) and p not in parts]
+    # macOS: the added folders go FIRST, so Homebrew's tools win over /usr/bin (whose python3 is a stub that pops the
+    # "install command line developer tools" dialog when those tools are missing)
+    env["PATH"] = os.pathsep.join(add + parts if SYSTEM == "Darwin" else parts + add)
     env["PYTHONIOENCODING"] = "utf-8"
     env["PYTHONUTF8"] = "1"
     return env
+
+
+def _apple_dev_tools():
+    """True when /usr/bin/python3 is a real interpreter; on macOS it is a stub until the command line tools exist"""
+    if SYSTEM != "Darwin":
+        return True
+    try:
+        return subprocess.run(["/usr/bin/xcode-select", "-p"], capture_output=True).returncode == 0
+    except OSError:
+        return False
 
 
 def ytdlp_cmd(env):
@@ -83,7 +96,7 @@ def ytdlp_cmd(env):
     names = ("py", "python", "python3") if SYSTEM == "Windows" else ("python3", "python")
     for name in names:
         p = shutil.which(name, path=path)
-        if not p or "WindowsApps" in p:
+        if not p or "WindowsApps" in p or (p.startswith("/usr/bin/") and not _apple_dev_tools()):
             continue
         r = subprocess.run([p, "-c", "import yt_dlp"], capture_output=True, env=env, creationflags=NO_WINDOW)
         if r.returncode == 0:
