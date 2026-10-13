@@ -13,18 +13,22 @@ Premiere Pro has extensions that take a YouTube link and drop the video straight
 
 Also:
 
-- **1080p H.264 + AAC by default**, which Resolve decodes on every platform. *Best quality* takes the source's top stream (often 4K VP9 or AV1). *Audio only* saves a WAV.
+- **1080p H.264 + AAC by default.** The smaller side is capped at 1080, so vertical videos keep their full resolution. *Best quality* takes the source's top stream (often 4K VP9 or AV1). *Audio only* saves a WAV.
 - **Original-language audio** on auto-dubbed videos: the original track is preferred over the dubs.
-- **A log of every yoink** (time, URL, title, file) in `yoink_log.csv`, so you always know where a clip came from.
-- **No duplicates:** yoinking the same link again reuses the clip already in the bin.
+- **A log of every yoink** (time, URL, title, file, quality) in `yoink_log.csv`, so you always know where a clip came from.
+- **No duplicates:** yoinking the same link at the same quality again reuses the clip already in the bin. Each quality keeps its own file.
+- **Playlist links** take the first video only.
+- **Linux:** Resolve does not decode AAC there, so the audio is converted to PCM in a `.mov` after the download. The free Linux version of Resolve does not decode H.264 either; use Studio or *Best quality*.
 
 ## Requirements
 
-- DaVinci Resolve (free or Studio) with Python scripting available
+- DaVinci Resolve with Python scripting available (the Scripts-menu tool works in Resolve; headless use needs Resolve Studio)
 - Python 3.8+
-- [yt-dlp](https://github.com/yt-dlp/yt-dlp): `pip install -U yt-dlp`
-- [ffmpeg](https://ffmpeg.org/) on your `PATH`
-- Recommended for YouTube: [Node.js](https://nodejs.org/) or [Deno](https://deno.com/) on your `PATH`. yt-dlp uses one of them for YouTube's player checks.
+- [yt-dlp](https://github.com/yt-dlp/yt-dlp) with its default extras: `pip install -U "yt-dlp[default]"`
+- [ffmpeg](https://ffmpeg.org/)
+- Recommended for YouTube: [Node.js](https://nodejs.org/) or [Deno](https://deno.com/). yt-dlp uses one of them for YouTube's player checks.
+
+Homebrew (`/opt/homebrew/bin`, `/usr/local/bin`), `pip --user` and the usual Windows Python folders are searched automatically, so tools are found even when Resolve was started from the Dock or Start menu with a short `PATH`. To point at a specific yt-dlp, set `DAVINCI_YOINK_YTDLP`.
 
 ## Install
 
@@ -40,14 +44,14 @@ To remove it: `python install.py --uninstall`
 
 ## Where files go
 
-The `DAVINCI_YOINK_DIR` environment variable, otherwise:
+The `DAVINCI_YOINK_DIR` environment variable, else the folder set at install (`python install.py --folder <path>`), otherwise:
 
 - Windows, Linux: `~/Videos/DaVinci Yoink`
 - macOS: `~/Movies/DaVinci Yoink`
 
 ## Headless use
 
-With Resolve running and external scripting enabled (Preferences > System > General > External scripting using: Local):
+With Resolve Studio running and external scripting set to Local (Preferences > System > General > External scripting using):
 
 ```
 python davinci_yoink.py --headless "<url>" [--quality 1080|best|audio] [--no-timeline]
@@ -58,7 +62,7 @@ python davinci_yoink.py --headless "<url>" [--quality 1080|best|audio] [--no-tim
 Sites change often, and yt-dlp updates to keep up. Most failures are fixed by:
 
 ```
-pip install -U yt-dlp
+pip install -U "yt-dlp[default]"
 ```
 
 ## License
