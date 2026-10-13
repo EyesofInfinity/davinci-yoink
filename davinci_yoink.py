@@ -27,7 +27,7 @@ MIT License. See LICENSE.
 """
 import csv, datetime, glob, json, os, platform, re, shutil, subprocess, sys
 
-__version__ = "1.1.0"
+__version__ = "1.1.1"
 DEFAULT_DIR = None                     # install.py --folder writes a path here in the installed copy
 BIN = "Yoinked"
 ORIG = "[format_note*=original]"
@@ -40,8 +40,18 @@ SYSTEM = platform.system()
 NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
 
 
+def _menu_folder():
+    """the folder install.py --folder wrote into the menu copy, so headless runs and --doctor use it too"""
+    import ast
+    try:
+        m = re.search(r"^DEFAULT_DIR = ('.*?'|\".*?\")", open(menu_path(), encoding="utf-8").read(), re.M)
+        return ast.literal_eval(m.group(1)) if m else None
+    except (OSError, ValueError, SyntaxError):
+        return None
+
+
 def out_dir():
-    d = os.environ.get("DAVINCI_YOINK_DIR") or DEFAULT_DIR
+    d = os.environ.get("DAVINCI_YOINK_DIR") or DEFAULT_DIR or _menu_folder()
     if d:
         return os.path.abspath(os.path.expanduser(d))
     sub = "Movies" if SYSTEM == "Darwin" else "Videos"
@@ -130,11 +140,44 @@ def private_copy(path):
     return False
 
 
+def menu_path():
+    """where install.py puts the copy that Resolve lists under Workspace > Scripts"""
+    home = os.path.expanduser("~")
+    if SYSTEM == "Windows":
+        base = os.path.join(os.environ.get("APPDATA", os.path.join(home, "AppData", "Roaming")),
+                            "Blackmagic Design", "DaVinci Resolve", "Support", "Fusion", "Scripts")
+    elif SYSTEM == "Darwin":
+        base = os.path.join(home, "Library", "Application Support", "Blackmagic Design", "DaVinci Resolve",
+                            "Fusion", "Scripts")
+    else:
+        base = os.path.join(home, ".local", "share", "DaVinciResolve", "Fusion", "Scripts")
+    return os.path.join(base, "Utility", "DaVinci Yoink.py")
+
+
+def menu_version(path=None):
+    try:
+        m = re.search(r'^__version__ = "([^"]+)"', open(path or menu_path(), encoding="utf-8").read(), re.M)
+        return m.group(1) if m else "unknown"
+    except OSError:
+        return None
+
+
 def check():
     """what DaVinci Yoink can find, the way it finds it at download time"""
     env = tool_env()
-    rep = {"version": __version__, "python": sys.version.split()[0], "yt-dlp": None, "ffmpeg": None, "js": None,
-           "folder": out_dir(), "problems": []}
+    rep = {"version": __version__, "python": sys.version.split()[0],
+           "python_home": os.path.dirname(os.path.dirname(os.path.abspath(os.__file__))),
+           "yt-dlp": None, "ffmpeg": None, "js": None, "folder": out_dir(), "menu": None, "problems": []}
+    mv = menu_version()
+    if mv is None:
+        rep["problems"].append("not installed in Resolve's Scripts menu: python install.py")
+    elif private_copy(menu_path()):
+        rep["problems"].append("the menu copy is in a packaged app's private storage, so Resolve cannot list it: "
+                               "start Resolve once, then run python install.py again")
+    else:
+        rep["menu"] = f"{menu_path()} (version {mv})"
+        if mv != __version__:
+            rep["problems"].append(f"the menu copy is version {mv} and this one is {__version__}: python install.py")
     try:
         cmd = ytdlp_cmd(env)
         where = cmd[0]
@@ -162,8 +205,8 @@ def _doctor():
     import tempfile, time
     here = os.path.dirname(os.path.abspath(__file__))
     rep = check()
-    print(f"DaVinci Yoink {rep['version']} (this shell, Python {rep['python']})")
-    for k in ("yt-dlp", "ffmpeg", "js", "folder"):
+    print(f"DaVinci Yoink {rep['version']} (this shell, Python {rep['python']} at {rep['python_home']})")
+    for k in ("yt-dlp", "ffmpeg", "js", "menu", "folder"):
         print(f"  {k:7} {rep[k] or 'MISSING'}")
     try:
         r = _scripting_module().scriptapp("Resolve")
@@ -187,10 +230,18 @@ def _doctor():
                 break
             time.sleep(0.2)
         res = json.load(open(out, encoding="utf-8")) if os.path.exists(out) else None
+        for f in (probe, out):                                  # the probe only reads; leave nothing behind
+            try:
+                os.remove(f)
+            except OSError:
+                pass
         if res:
-            print(f"Resolve's own Python {res['python']} sees:")
-            for k in ("yt-dlp", "ffmpeg", "js"):
+            print(f"Resolve's own Python {res['python']} at {res['python_home']} sees:")
+            for k in ("yt-dlp", "ffmpeg", "js", "menu"):
                 print(f"  {k:7} {res[k] or 'MISSING'}")
+            if os.path.normcase(res["python_home"]) != os.path.normcase(rep["python_home"]):
+                print(f"note: Resolve runs a different Python than this shell; if anything is missing, run "
+                      f"install.py with {res['python_home']}")
         else:
             print("Resolve: answered but did not run the probe")
     problems = (res or rep)["problems"]                       # Resolve's own view wins when it answers

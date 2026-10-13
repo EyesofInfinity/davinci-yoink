@@ -56,8 +56,8 @@ To remove it: `python install.py --uninstall`
 
 Follow these steps in order.
 
-1. **Find the Python that Resolve uses** and use it for every command below. On Windows and macOS this is the python.org install (Windows: `py -3` or the `python` on PATH, never the Microsoft Store stub; macOS: `/usr/local/bin/python3` from python.org). On Linux, the system `python3`.
-2. **Clone and install:**
+1. **Pick the Python** and use that same command for every step below. On Windows and macOS, Resolve uses the python.org install. Windows: `python` (or `py -3` when `python` is the Microsoft Store stub). macOS: `python3` from python.org. Linux: the system `python3`. Step 4 confirms Resolve's own Python, and its path, so a wrong guess shows up there.
+2. **Clone and install** (with the Python from step 1):
    ```
    git clone https://github.com/EyesofInfinity/davinci-yoink
    cd davinci-yoink
@@ -70,11 +70,13 @@ Follow these steps in order.
    - ffmpeg on Linux: the package manager
    - Node.js (recommended for YouTube): `winget install OpenJS.NodeJS.LTS` or `brew install node`
 4. **Verify from Resolve's side:** `python davinci_yoink.py --doctor`.
-   - With Resolve Studio open and external scripting set to Local, it asks Resolve's own Python what it sees. That view is the one that counts.
+   - With Resolve Studio open and external scripting set to Local, it runs a small read-only probe inside Resolve and reports what Resolve's own Python sees, including the copy in its Scripts menu. That view is the one that counts. The probe's temp files are removed afterwards.
+   - If it notes that Resolve runs a different Python, rerun step 2 with the path it prints.
    - A line saying a file is "a packaged app's private copy" means step 2's warning applies. Reinstall with `python -s -m pip install --no-user -U "yt-dlp[default]"`, then run the doctor again.
    - Done means the doctor prints `OK: ready to yoink`.
    - If Resolve isn't reachable (the free version, or external scripting off), ask the user to restart Resolve and open Workspace > Scripts > DaVinci Yoink. The status line reads `ready` when everything is found.
-5. **Optional download folder:** `python install.py --no-deps --folder "<path>"` sets where clips are saved.
+5. **Tell the user:** if DaVinci Yoink isn't listed under Workspace > Scripts, restart Resolve once.
+6. **Optional download folder:** `python install.py --no-deps --folder "<path>"` sets where clips are saved. A later reinstall keeps the folder already set.
 
 ## Where files go
 

@@ -5,26 +5,13 @@ usage: python install.py                               (then restart Resolve or 
        python install.py --uninstall
 Run it with the Python that DaVinci Resolve uses (on Windows and macOS, the python.org install).
 """
-import os, platform, subprocess, sys
+import functools, os, platform, subprocess, sys
 
-NAME = "DaVinci Yoink.py"
+print = functools.partial(print, flush=True)              # keep order with pip's output
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 import davinci_yoink as dy  # noqa: E402
-
-
-def utility_dir():
-    home = os.path.expanduser("~")
-    system = platform.system()
-    if system == "Windows":
-        base = os.path.join(os.environ.get("APPDATA", os.path.join(home, "AppData", "Roaming")),
-                            "Blackmagic Design", "DaVinci Resolve", "Support", "Fusion", "Scripts")
-    elif system == "Darwin":
-        base = os.path.join(home, "Library", "Application Support", "Blackmagic Design", "DaVinci Resolve",
-                            "Fusion", "Scripts")
-    else:
-        base = os.path.join(home, ".local", "share", "DaVinciResolve", "Fusion", "Scripts")
-    return os.path.join(base, "Utility")
 
 
 def install_ytdlp():
@@ -39,7 +26,7 @@ def install_ytdlp():
 
 
 def main():
-    dest = os.path.join(utility_dir(), NAME)
+    dest = dy.menu_path()
     if "--uninstall" in sys.argv:
         if os.path.exists(dest):
             os.remove(dest)
@@ -57,9 +44,17 @@ def main():
         src = src.replace(line, "DEFAULT_DIR = " + repr(folder), 1)
         dy.DEFAULT_DIR = folder
         print("download folder:", folder)
+    if "--folder" not in sys.argv and os.path.exists(dest):          # a reinstall keeps the folder already set
+        import ast, re
+        m = re.search(r"^DEFAULT_DIR = ('.*?'|\".*?\")", open(dest, encoding="utf-8").read(), re.M)
+        if m:
+            src = src.replace("DEFAULT_DIR = None", "DEFAULT_DIR = " + m.group(1), 1)
+            dy.DEFAULT_DIR = ast.literal_eval(m.group(1))
+            print("download folder kept:", dy.DEFAULT_DIR)
+    before = dy.menu_version(dest)
     with open(dest, "w", encoding="utf-8") as f:
         f.write(src)
-    print("installed", dest)
+    print(("replaced version " + before + " at " if before else "installed ") + dest)
     if dy.private_copy(dest):
         print("WARNING: that copy landed in a packaged app's private storage, so Resolve will not list it. Start "
               "Resolve once (it creates its Scripts folder), then run this installer again.")
@@ -67,7 +62,7 @@ def main():
         install_ytdlp()
     rep = dy.check()
     print("\nwhat DaVinci Yoink finds:")
-    for k in ("yt-dlp", "ffmpeg", "js", "folder"):
+    for k in ("yt-dlp", "ffmpeg", "js", "menu", "folder"):
         print(f"  {k:7} {rep[k] or 'MISSING'}")
     if rep["problems"]:
         print("to do:\n  " + "\n  ".join(rep["problems"]))
