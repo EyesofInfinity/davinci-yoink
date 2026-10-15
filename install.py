@@ -7,6 +7,8 @@ Run it with the Python that DaVinci Resolve uses (on Windows and macOS, the pyth
 """
 import functools, os, platform, subprocess, sys
 
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")   # paths with any characters print when piped
 print = functools.partial(print, flush=True)              # keep order with pip's output
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -64,6 +66,8 @@ def main():
     print("\nwhat DaVinci Yoink finds:")
     for k in ("yt-dlp", "ffmpeg", "js", "menu", "folder"):
         print(f"  {k:7} {rep[k] or 'MISSING'}")
+    for w in rep["warnings"]:
+        print("  warning: " + w)
     if rep["problems"]:
         print("to do:\n  " + "\n  ".join(rep["problems"]))
     if not rep["js"]:

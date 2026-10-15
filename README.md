@@ -24,7 +24,7 @@ Also:
 
 - DaVinci Resolve with Python scripting available (the Scripts-menu tool works in Resolve; headless use needs Resolve Studio)
 - Python 3.8+
-- [yt-dlp](https://github.com/yt-dlp/yt-dlp) with its default extras: `pip install -U "yt-dlp[default]"`
+- [yt-dlp](https://github.com/yt-dlp/yt-dlp) with its default extras: `python -s -m pip install --no-user -U "yt-dlp[default]"` (`install.py` does this for you)
 - [ffmpeg](https://ffmpeg.org/)
 - Recommended for YouTube: [Node.js](https://nodejs.org/) or [Deno](https://deno.com/). yt-dlp uses one of them for YouTube's player checks.
 
@@ -72,9 +72,9 @@ Follow these steps in order.
 4. **Verify from Resolve's side:** `python davinci_yoink.py --doctor`.
    - With Resolve Studio open and external scripting set to Local, it runs a small read-only probe inside Resolve and reports what Resolve's own Python sees, including the copy in its Scripts menu. That view is the one that counts. The probe's temp files are removed afterwards.
    - If it notes that Resolve runs a different Python, rerun step 2 with the path it prints.
-   - A line saying a file is "a packaged app's private copy" means step 2's warning applies. Reinstall with `python -s -m pip install --no-user -U "yt-dlp[default]"`, then run the doctor again.
-   - Done means the doctor prints `OK: ready to yoink`.
-   - If Resolve isn't reachable (the free version, or external scripting off), ask the user to restart Resolve and open Workspace > Scripts > DaVinci Yoink. The status line reads `ready` when everything is found.
+   - A warning about "a packaged app's private storage" means step 2's warning may apply. If Resolve's view then misses the tool, reinstall with `python -s -m pip install --no-user -U "yt-dlp[default]"` and run the doctor again.
+   - Done means the doctor prints `OK: ready to yoink` (exit code 0). It prints that only after Resolve's own Python has checked.
+   - `NOT VERIFIED from Resolve's side` (exit code 2) means Resolve wasn't reachable (the free version, or external scripting off) or couldn't run the probe. Ask the user to restart Resolve and open Workspace > Scripts > DaVinci Yoink: the status line reads `ready` when everything is found.
 5. **Tell the user:** if DaVinci Yoink isn't listed under Workspace > Scripts, restart Resolve once.
 6. **Optional download folder:** `python install.py --no-deps --folder "<path>"` sets where clips are saved. A later reinstall keeps the folder already set.
 
@@ -98,7 +98,7 @@ python davinci_yoink.py --headless "<url>" [--quality 1080|best|audio] [--no-tim
 Sites change often, and yt-dlp updates to keep up. Most failures are fixed by:
 
 ```
-pip install -U "yt-dlp[default]"
+python -s -m pip install --no-user -U "yt-dlp[default]"
 ```
 
 `python davinci_yoink.py --doctor` shows what DaVinci Yoink finds, and with Resolve Studio reachable, what Resolve itself sees.
